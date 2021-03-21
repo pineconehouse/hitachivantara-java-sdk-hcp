@@ -1,1 +1,1 @@
-# hitachivantara-java-sdk-hcp
+The HCP-SDK is a customized SDK for the private interface protocol of Hitachi Content PlantForm (HCP). It contains implementations for all HCP REST APIs, HCP system management APIs, and HCP-MQE (object query) APIs. With this SDK, users can access the HCP proprietary protocol more easily
