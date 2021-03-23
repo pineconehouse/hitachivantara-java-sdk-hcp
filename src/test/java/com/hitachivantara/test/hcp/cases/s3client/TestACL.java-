@@ -1,0 +1,85 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.test.hcp.cases.s3client;
+
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.util.List;
+
+import org.junit.Test;
+
+import com.hitachivantara.common.ex.HSCException;
+import com.hitachivantara.hcp.common.ex.InvalidResponseException;
+import com.hitachivantara.hcp.standard.define.ACLContents.Permission;
+import com.hitachivantara.hcp.standard.model.metadata.AccessControlList;
+import com.hitachivantara.hcp.standard.model.request.impl.PutACLRequest;
+import com.hitachivantara.test.hcp.TestDataFactory;
+import com.hitachivantara.test.hcp.TestHCPBase;
+
+/**
+ * @author sohan
+ *
+ */
+public class TestACL extends TestHCPBase {
+
+	@Test
+	public void testDeleteSetGetCheckACL() throws InvalidResponseException, HSCException, IOException {
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+		TestDataFactory.getInstance().prepareSmallObject(key1);
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+		
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+		hcpClient.deleteObjectACL(key1);
+		boolean exist = hcpClient.doesObjectACLExist(key1);
+		assertTrue(exist == false);
+
+		AccessControlList acl = new AccessControlList();
+		acl.grantPermissionToUser(localUserName1, Permission.READ, Permission.WRITE, Permission.WRITE_ACL);
+		hcpClient.setObjectACL(new PutACLRequest(key1).withAcl(acl));
+		
+		exist = hcpClient.doesObjectACLExist(key1);
+		assertTrue(exist == true);
+		
+		AccessControlList acl1 = hcpClient.getObjectACL(key1);
+		List<Permission[]> ps = acl1.getPermission(localUserName1);
+		
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+		
+		// RESULT VERIFICATION --------------------------------------------------------------------
+		assertTrue(contains(ps.get(0), Permission.READ));
+		assertTrue(contains(ps.get(0), Permission.WRITE));
+		assertTrue(contains(ps.get(0), Permission.WRITE_ACL));
+		assertTrue(false == contains(ps.get(0), Permission.READ_ACL));
+		// RESULT VERIFICATION --------------------------------------------------------------------
+		
+		// CLEAN ----------------------------------------------------------------------------------
+		hcpClient.deleteObjectACL(key1);
+		exist = hcpClient.doesObjectACLExist(key1);
+		assertTrue(exist == false);
+		// CLEAN ----------------------------------------------------------------------------------
+	}
+
+	private boolean contains(Permission[] ps, Permission p) {
+		for (Permission permission : ps) {
+			if (permission == p) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}

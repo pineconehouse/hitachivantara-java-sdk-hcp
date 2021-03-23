@@ -1,0 +1,22 @@
+#
+#
+# Set root category priority to INFO and its only appender to FILE.
+#
+log4j.rootCategory=OFF,CONSOLE
+#
+# Set the code priority to DEBUG
+#
+#log4j.category.com=INFO,CONSOLE,LOGFILE
+log4j.category.org=OFF,CONSOLE
+#
+# FILE is a FileAppender that appends to H:\Share\com.log
+log4j.appender.CONSOLE=org.apache.log4j.ConsoleAppender
+log4j.appender.CONSOLE.layout=org.apache.log4j.PatternLayout
+log4j.appender.CONSOLE.layout.ConversionPattern=[%d{ISO8601}] %m%n
+
+log4j.appender.LOGFILE=org.apache.log4j.RollingFileAppender
+log4j.appender.LOGFILE.File=./logs/Tracking.log
+log4j.appender.LOGFILE.layout=org.apache.log4j.PatternLayout
+log4j.appender.LOGFILE.maxFileSize=30MB
+log4j.appender.LOGFILE.maxBackupIndex=2
+log4j.appender.LOGFILE.layout.ConversionPattern=[%d{ISO8601}] %m%n

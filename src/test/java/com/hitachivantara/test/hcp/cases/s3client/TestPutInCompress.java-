@@ -1,0 +1,88 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.test.hcp.cases.s3client;
+
+import static org.junit.Assert.assertTrue;
+
+import java.io.File;
+
+import org.junit.Test;
+
+import com.hitachivantara.common.util.DigestUtils;
+import com.hitachivantara.hcp.common.define.HashAlgorithm;
+import com.hitachivantara.hcp.standard.model.PutObjectResult;
+import com.hitachivantara.hcp.standard.model.request.impl.PutObjectRequest;
+import com.hitachivantara.test.hcp.TestDataFactory;
+import com.hitachivantara.test.hcp.TestHCPBase;
+import com.hitachivantara.test.hcp.TestDataFactory.ContentType;
+import com.hitachivantara.test.hcp.TestHCPBase.CalcTime;
+
+public class TestPutInCompress extends TestHCPBase {
+
+	@Test
+	public void testCreate100MObjWithCompressed() throws Exception {
+		File tempFile = TestDataFactory.createTestFile(ContentType.TXT_100MB);
+		String key = basedir + tempFile.getName();
+		CalcTime time = new CalcTime();
+		String localDigest = DigestUtils.format2Hex(DigestUtils.calcSHA256(tempFile));
+
+		// ----------------------------------------------------------------------------------------
+		PutObjectRequest request = new PutObjectRequest(key);
+		request.withVerfiyContent(HashAlgorithm.SHA256);
+
+		for (int i = 0; i < 3; i++) {
+			request.withContent(tempFile, true);
+			time.start();
+			PutObjectResult result = hcpClient.putObject(request);
+			time.end();
+			time.print("WithCompressed");
+			assertTrue(result.getContentHash().equals(localDigest));
+		}
+
+		for (int i = 0; i < 3; i++) {
+			request.withContent(tempFile, false);
+			time.start();
+			PutObjectResult result = hcpClient.putObject(request);
+			time.end();
+			time.print("WithoutCompressed");
+			assertTrue(result.getContentHash().equals(localDigest));
+		}
+		// ----------------------------------------------------------------------------------------
+	}
+	
+	@Test
+	public void testCreate100MObjWithoutCompressed() throws Exception {
+		File tempFile = TestDataFactory.createTestFile(ContentType.TXT_100MB);
+		String key = basedir + tempFile.getName();
+		CalcTime time = new CalcTime();
+		String localDigest = DigestUtils.format2Hex(DigestUtils.calcSHA256(tempFile));
+
+		// ----------------------------------------------------------------------------------------
+		PutObjectRequest request = new PutObjectRequest(key);
+		request.withVerfiyContent(HashAlgorithm.SHA256);
+
+		for (int i = 0; i < 3; i++) {
+			request.withContent(tempFile, false);
+			time.start();
+			PutObjectResult result = hcpClient.putObject(request);
+			time.end();
+			time.print("WithoutCompressed");
+			assertTrue(result.getContentHash().equals(localDigest));
+		}
+		// ----------------------------------------------------------------------------------------
+	}
+
+}

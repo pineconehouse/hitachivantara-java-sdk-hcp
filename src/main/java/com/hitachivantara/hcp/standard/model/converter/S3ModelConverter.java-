@@ -1,0 +1,223 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.hcp.standard.model.converter;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.S3VersionSummary;
+import com.hitachivantara.common.util.StringUtils;
+import com.hitachivantara.hcp.common.define.Constants;
+import com.hitachivantara.hcp.common.define.HashAlgorithm;
+import com.hitachivantara.hcp.standard.define.ObjectType;
+import com.hitachivantara.hcp.standard.io.HCPInputStream;
+import com.hitachivantara.hcp.standard.model.HCPObject;
+import com.hitachivantara.hcp.standard.model.HCPObjectEntry;
+import com.hitachivantara.hcp.standard.model.HCPObjectSummary;
+import com.hitachivantara.hcp.standard.model.PutObjectResult;
+import com.hitachivantara.hcp.standard.model.metadata.S3CompatibleMetadata;
+
+public class S3ModelConverter {
+	public static com.amazonaws.ClientConfiguration toS3ClientConfiguration(com.hitachivantara.core.http.client.ClientConfiguration hcpClientConfig) {
+		if (hcpClientConfig == null) {
+			return null;
+		}
+
+		com.amazonaws.ClientConfiguration s3ClientConfiguration = new com.amazonaws.ClientConfiguration();
+
+		// s3ClientConfiguration.setConnectionTimeout(hcpClientConfig.getConnectionTimeout());
+		// s3ClientConfiguration.setMaxConnections(hcpClientConfig.getMaxConnections());
+		// if (hcpClientConfig.getMaxErrorRetry() > 0) {
+		// s3ClientConfiguration.setMaxErrorRetry(hcpClientConfig.getMaxErrorRetry());
+		// }
+		// s3ClientConfiguration.retryPolicy(hcpClientConfig.getRetryPolicy());
+		// s3ClientConfiguration.setUseThrottleRetries(hcpClientConfig.useThrottledRetries());
+		// s3ClientConfiguration.setLocalAddress(hcpClientConfig.getLocalAddress());
+		s3ClientConfiguration.setProtocol(com.amazonaws.Protocol.valueOf(hcpClientConfig.getProtocol().name()));
+		// s3ClientConfiguration.setProxyDomain(hcpClientConfig.getProxyDomain());
+		s3ClientConfiguration.setProxyHost(hcpClientConfig.getProxyHost());
+		s3ClientConfiguration.setProxyPassword(hcpClientConfig.getProxyPassword());
+		s3ClientConfiguration.setProxyPort(hcpClientConfig.getProxyPort());
+		s3ClientConfiguration.setProxyUsername(hcpClientConfig.getProxyUsername());
+		// s3ClientConfiguration.setProxyWorkstation(hcpClientConfig.getProxyWorkstation());
+		// s3ClientConfiguration.setNonProxyHosts(hcpClientConfig.getNonProxyHosts());
+		// s3ClientConfiguration.setProxyAuthenticationMethods(hcpClientConfig.getProxyAuthenticationMethods());
+		// s3ClientConfiguration.setPreemptiveBasicProxyAuth(hcpClientConfig.isPreemptiveBasicProxyAuth());
+		// s3ClientConfiguration.setSocketTimeout(hcpClientConfig.getSocketTimeout());
+		// s3ClientConfiguration.setRequestTimeout(hcpClientConfig.getRequestTimeout());
+		// s3ClientConfiguration.setClientExecutionTimeout(hcpClientConfig.getClientExecutionTimeout());
+		// s3ClientConfiguration.userAgentPrefix(hcpClientConfig.getUserAgentPrefix());
+		// s3ClientConfiguration.userAgentSuffix(hcpClientConfig.getUserAgentSuffix());
+		// s3ClientConfiguration.setUseReaper(hcpClientConfig.useReaper());
+		// s3ClientConfiguration.setUseGzip(hcpClientConfig.useGzip());
+		// s3ClientConfiguration.setSocketBufferSizeHints(hcpClientConfig.getSocketBufferSizeHints()[0],
+		// hcpClientConfig.getSocketBufferSizeHints()[1]);
+		// s3ClientConfiguration.setSignerOverride(hcpClientConfig.getSignerOverride());
+		// s3ClientConfiguration.setResponseMetadataCacheSize(hcpClientConfig.getResponseMetadataCacheSize());
+		// s3ClientConfiguration.setDnsResolver(hcpClientConfig.getDnsResolver());
+		// s3ClientConfiguration.setUseExpectContinue(hcpClientConfig.isUseExpectContinue());
+		// s3ClientConfiguration.apacheHttpClientConfig(new
+		// ApacheHttpClientConfig(hcpClientConfig.getApacheHttpClientConfig());
+		// s3ClientConfiguration.setCacheResponseMetadata(hcpClientConfig.getCacheResponseMetadata());
+		// s3ClientConfiguration.setConnectionTTL(hcpClientConfig.getConnectionTTL());
+		// s3ClientConfiguration.setConnectionMaxIdleMillis(hcpClientConfig.getConnectionMaxIdleMillis());
+		// s3ClientConfiguration.validateAfterInactivityMillis(hcpClientConfig.getValidateAfterInactivityMillis());
+		// s3ClientConfiguration.tcpKeepAlive(hcpClientConfig.useTcpKeepAlive());
+		// s3ClientConfiguration.secureRandom(hcpClientConfig.getSecureRandom());
+		// s3ClientConfiguration.getHeaders().clear();
+		// s3ClientConfiguration.getHeaders().putAll(hcpClientConfig.getHeaders());
+		// s3ClientConfiguration.maxConsecutiveRetriesBeforeThrottling(hcpClientConfig.getMaxConsecutiveRetriesBeforeThrottling());
+
+		return s3ClientConfiguration;
+	}
+
+	public static PutObjectResult toHCPPutObjectResult(String key, com.amazonaws.services.s3.model.PutObjectResult s3PutResult) {
+
+		String location = key;
+		String versionId = s3PutResult.getVersionId();
+		String eTag = s3PutResult.getETag();
+		String contentHash = eTag;// s3PutResult.getContentMd5();
+		PutObjectResult hcpResult = new com.hitachivantara.hcp.standard.model.PutObjectResult(location, versionId, "MD5", contentHash, eTag, Constants.LONG_NOTHING);
+
+		return hcpResult;
+	}
+
+	public static HCPObject toHCPObject(S3Object s3Object) {
+		HCPInputStream in = toHCPInputStream(s3Object.getObjectContent());
+		// TODO directory 判断
+		HCPObject hcpObj = new HCPObject();
+
+		hcpObj.setContent(in);
+		hcpObj.setType(ObjectType.object);
+
+		toHCPObjectSummary(s3Object.getKey(), s3Object.getObjectMetadata(), hcpObj);
+
+		return hcpObj;
+	}
+
+	// public static HCPObjects toHCPObjects(ObjectListing objListing) {
+	// List<HCPObjectEntry> entrys = toHCPObjectEntrys(objListing.getObjectSummaries());
+	//
+	// String dir = objListing.getCommonPrefixes();
+	// HCPObjects hcpObjects = new HCPObjects(dir);
+	// return hcpObjects;
+	// }
+
+	public static List<HCPObjectEntry> toHCPObjectEntrys(List<S3ObjectSummary> summarys) {
+		List<HCPObjectEntry> entrys = new ArrayList<HCPObjectEntry>();
+		for (S3ObjectSummary s3ObjectSummary : summarys) {
+			HCPObjectEntry entry = new HCPObjectEntry();
+
+			entry.setKey(s3ObjectSummary.getKey());
+			entry.setSize(s3ObjectSummary.getSize());
+			entry.setETag(s3ObjectSummary.getETag());
+			entry.setOwner(s3ObjectSummary.getOwner().getId());
+			entry.setChangeTime(s3ObjectSummary.getLastModified().getTime());
+
+			entrys.add(entry);
+		}
+
+		return entrys;
+	}
+
+	public static HCPInputStream toHCPInputStream(S3ObjectInputStream in) {
+		return new HCPInputStream(in);
+	}
+
+	public static S3CompatibleMetadata toHCPObjectMetadata(ObjectMetadata metadata) {
+		S3CompatibleMetadata hcpmetadata = new S3CompatibleMetadata();
+		hcpmetadata.setSize(metadata.getContentLength());
+		hcpmetadata.setContentType(metadata.getContentType());
+		hcpmetadata.setHashAlgorithmName(HashAlgorithm.MD5.getKeyname());
+		hcpmetadata.setContentHash(metadata.getETag());// metadata.getContentMD5());
+		hcpmetadata.setChangeTime(metadata.getLastModified() != null ? metadata.getLastModified().getTime() : null);
+		Map<String, String> map = metadata.getUserMetadata();
+		hcpmetadata.putAll(map);
+		return hcpmetadata;
+	}
+
+	public static ObjectMetadata toS3ObjectMetadata(S3CompatibleMetadata metadata) {
+		if (metadata != null) {
+			ObjectMetadata s3metadata = new ObjectMetadata();
+			for (Iterator<String> it = metadata.keySet().iterator(); it.hasNext();) {
+				String key = (String) it.next();
+				s3metadata.addUserMetadata(key, metadata.get(key));
+			}
+
+			return s3metadata;
+		}
+
+		return null;
+	}
+
+	public static List<HCPObjectEntry> toHCPObjectVersionEntrys(List<S3VersionSummary> summarys) {
+		List<HCPObjectEntry> entrys = new ArrayList<HCPObjectEntry>();
+		for (S3VersionSummary s3ObjectSummary : summarys) {
+			HCPObjectEntry entry = new HCPObjectEntry();
+
+			entry.setKey(s3ObjectSummary.getKey());
+			entry.setSize(s3ObjectSummary.getSize());
+			entry.setETag(s3ObjectSummary.getETag());
+			entry.setOwner(s3ObjectSummary.getOwner().getId());
+			entry.setChangeTime(s3ObjectSummary.getLastModified().getTime());
+
+			entrys.add(entry);
+		}
+
+		return entrys;
+	}
+
+	public static HCPObjectSummary toHCPObjectSummary(String key, ObjectMetadata s3Metadata) {
+		HCPObjectSummary summary = new HCPObjectSummary();
+
+		return toHCPObjectSummary(key, s3Metadata, summary);
+	}
+
+	public static HCPObjectSummary toHCPObjectSummary(String key, ObjectMetadata s3Metadata, HCPObjectSummary summary) {
+		// s3Metadata.getContentDisposition()
+		// s3Metadata.getContentEncoding()
+		// s3Metadata.getContentLanguage()
+		// s3Metadata.getContentRange()
+		// s3Metadata.getExpirationTime()
+		// s3Metadata.getLastModified()
+		// s3Metadata.getPartCount()
+
+		summary.setKey(key);
+		// summary.setName(name);
+		summary.setType(ObjectType.object);
+		summary.setVersionId(s3Metadata.getVersionId());
+
+		summary.setSize(s3Metadata.getContentLength());
+		summary.setContentLength(s3Metadata.getContentLength());
+		summary.setContentType(s3Metadata.getContentType());
+		// TODO 分片上传的没有hash "9839968fc3a7e9a5b365a42e5852ac844efe336395390ff1893192466cbea4fd-65" a55072a1014d6bdfafebc452e4717a8d
+		String etag = s3Metadata.getETag();
+		if (StringUtils.isNotEmpty(etag) && !etag.contains("-")) {
+			summary.setHashAlgorithmName(HashAlgorithm.MD5.getKeyname());
+			summary.setContentHash(s3Metadata.getETag());
+		}
+		summary.setETag(etag);
+		summary.setChangeTime(s3Metadata.getLastModified() != null ? s3Metadata.getLastModified().getTime() : null);
+
+		return summary;
+	}
+}

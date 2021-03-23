@@ -1,0 +1,87 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.test.hcp.cases.s3client;
+
+import org.junit.Test;
+
+import com.hitachivantara.common.ex.HSCException;
+import com.hitachivantara.hcp.standard.api.event.ListObjectHandler;
+import com.hitachivantara.hcp.standard.define.NextAction;
+import com.hitachivantara.hcp.standard.model.HCPObjectEntry;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListObjectRequest;
+import com.hitachivantara.test.hcp.TestHCPBase;
+
+/**
+ * @author sohan
+ *
+ */
+public class TestOthers extends TestHCPBase {
+	int dircount = 0;
+	int count = 0;
+	int size = 0;
+
+	@Test
+	public void testListAllInNamespace() throws Exception {
+		ListObjectHandler listener = new ListObjectHandler() {
+			public NextAction foundObject(HCPObjectEntry objectEntry) throws HSCException {
+				// TODO Auto-generated method stub
+				// console.println(objectEntry.getKey()+"\t"+objectEntry.getType()+"\t"+objectEntry.getSize()+"\t"+objectEntry.getIngestTime()+"\t"+objectEntry.getChangeTime());
+				print.appendRecord(objectEntry.getKey(), objectEntry.getType(), objectEntry.getSize(), objectEntry.getIngestTime(), objectEntry.getChangeTime());
+				print.printout();
+				if (objectEntry.isDirectory()) {
+					dircount++;
+				} else {
+					count++;
+				}
+				size += (objectEntry.getSize() != null ? objectEntry.getSize() : 0);
+				return null;
+			}
+		};
+		ListObjectRequest request = new ListObjectRequest("/").withRecursiveDirectory(true);
+		hcpClient.listObjects(request, listener);
+
+		print.appendRecord(count);
+		print.appendRecord(dircount);
+		print.appendRecord(size, ((double) size) / (1024 * 1024 * 1024));
+	}
+
+	@Test
+	public void testClearNamespace() throws Exception {
+		ListObjectHandler listener = new ListObjectHandler() {
+			public NextAction foundObject(HCPObjectEntry objectEntry) throws HSCException {
+				// TODO Auto-generated method stub
+				// console.println(objectEntry.getKey()+"\t"+objectEntry.getType()+"\t"+objectEntry.getSize()+"\t"+objectEntry.getIngestTime()+"\t"+objectEntry.getChangeTime());
+				// print.addRow(objectEntry.getKey(),objectEntry.getType(),objectEntry.getSize(),objectEntry.getIngestTime(),objectEntry.getChangeTime());
+				// print.printout();
+				boolean ok = false;
+				if (objectEntry.isDirectory() && !".lost+found".equals(objectEntry.getName())) {
+					ok = hcpClient.deleteDirectory(new DeleteDirectoryRequest(objectEntry.getKey()));
+				} else if (!objectEntry.isDirectory()){
+					size += objectEntry.getSize();
+					ok = hcpClient.deleteObject(objectEntry.getKey());
+				}
+				print.appendRecord(ok, objectEntry.getKey(), objectEntry.getType(), objectEntry.getSize(), objectEntry.getIngestTime(), objectEntry.getChangeTime());
+				print.printout();
+				return null;
+			}
+		};
+		ListObjectRequest request = new ListObjectRequest("/").withRecursiveDirectory(false);
+		hcpClient.listObjects(request, listener);
+
+	}
+
+}

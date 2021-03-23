@@ -1,0 +1,115 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.hcp.standard.model.converter;
+
+import com.amazonaws.services.s3.model.CopyObjectRequest;
+import com.amazonaws.services.s3.model.MetadataDirective;
+import com.hitachivantara.common.ex.HSCException;
+import com.hitachivantara.common.util.StringUtils;
+import com.hitachivantara.hcp.standard.api.KeyAlgorithm;
+import com.hitachivantara.hcp.standard.model.request.HCPStandardRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.GetObjectRequest;
+
+public class S3RequestConverter {
+	private KeyAlgorithm keyAlgorithm = KeyAlgorithm.DEFAULT;
+	private String namespace = null;
+	// public S3RequestConverter(KeyAlgorithm keyAlgorithm) {
+	// this.keyAlgorithm = keyAlgorithm;
+	// }
+
+	public void setKeyAlgorithm(KeyAlgorithm keyAlgorithm) {
+		if (keyAlgorithm != null) {
+			this.keyAlgorithm = keyAlgorithm;
+		} else {
+			this.keyAlgorithm = KeyAlgorithm.DEFAULT;
+		}
+	}
+
+	public void setNamespace(String namespace) {
+		this.namespace = namespace;
+	}
+
+	public String genKey(HCPStandardRequest request) throws HSCException {
+		if (keyAlgorithm != null) {
+			return keyAlgorithm.generate(request.getKey());
+		}
+
+		return request.getKey();
+	}
+
+	public String genKey(String key) throws HSCException {
+		if (keyAlgorithm != null) {
+			return keyAlgorithm.generate(key);
+		}
+
+		return key;
+	}
+
+	public com.amazonaws.services.s3.model.GetObjectRequest toS3Request(GetObjectRequest request) throws HSCException {
+		String key = genKey(request);
+
+		String namespaceName = request.getNamespace();
+		if (StringUtils.isEmpty(namespaceName)) {
+			namespaceName = namespace;
+		}
+
+		com.amazonaws.services.s3.model.GetObjectRequest s3Request = new com.amazonaws.services.s3.model.GetObjectRequest(namespaceName, key, request.getVersionId());
+		if (request.getRange() != null) {
+			s3Request.withRange(request.getRange()[0], request.getRange()[1]);
+		}
+
+		return s3Request;
+	}
+
+	public com.amazonaws.services.s3.model.GetObjectMetadataRequest toS3Request(CheckObjectRequest request) throws HSCException {
+		String key = genKey(request);
+
+		String namespaceName = request.getNamespace();
+		if (StringUtils.isEmpty(namespaceName)) {
+			namespaceName = namespace;
+		}
+
+		com.amazonaws.services.s3.model.GetObjectMetadataRequest s3Request = new com.amazonaws.services.s3.model.GetObjectMetadataRequest(namespaceName, key, request.getVersionId());
+
+		return s3Request;
+	}
+
+	public CopyObjectRequest toS3Request(com.hitachivantara.hcp.standard.model.request.impl.CopyObjectRequest request) throws HSCException {
+		// Generate a new path based on the algorithm
+		String sourceKey = genKey(request.getSourceKey());
+		String targetKey = genKey(request.getTargetKey());
+
+		String sourceNamespace = request.getSourceNamespace();
+		if (StringUtils.isEmpty(sourceNamespace)) {
+			sourceNamespace = namespace;
+		}
+
+		String targetNamespace = request.getTargetNamespace();
+		if (StringUtils.isEmpty(targetNamespace)) {
+			targetNamespace = namespace;
+		}
+
+		MetadataDirective metadataDirective = request.isCopyingMetadata() ? MetadataDirective.COPY : null;
+		com.amazonaws.services.s3.model.CopyObjectRequest copyObjectRequest = new com.amazonaws.services.s3.model.CopyObjectRequest(
+				sourceNamespace,
+				sourceKey,
+				targetNamespace,
+				targetKey).withMetadataDirective(metadataDirective);
+
+		return copyObjectRequest;
+	}
+}

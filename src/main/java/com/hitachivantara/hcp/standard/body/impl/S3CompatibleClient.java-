@@ -1,0 +1,572 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.hcp.standard.body.impl;
+
+import java.io.File;
+import java.io.InputStream;
+import java.util.List;
+
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.DeleteObjectRequest;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.MetadataDirective;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
+import com.hitachivantara.common.ex.HSCException;
+import com.hitachivantara.common.ex.UnsupportedFunctionException;
+import com.hitachivantara.common.util.StringUtils;
+import com.hitachivantara.core.http.client.ClientConfiguration;
+import com.hitachivantara.core.http.util.URLUtils;
+import com.hitachivantara.hcp.common.auth.Credentials;
+import com.hitachivantara.hcp.common.define.HeaderKey;
+import com.hitachivantara.hcp.common.define.RequestHeadValue.CONTENT_TYPE;
+import com.hitachivantara.hcp.common.ex.InvalidResponseException;
+import com.hitachivantara.hcp.common.util.ValidUtils;
+import com.hitachivantara.hcp.standard.api.KeyAlgorithm;
+import com.hitachivantara.hcp.standard.api.MultipartUpload;
+import com.hitachivantara.hcp.standard.api.event.ListObjectHandler;
+import com.hitachivantara.hcp.standard.body.HCPStandardClient;
+import com.hitachivantara.hcp.standard.model.HCPObject;
+import com.hitachivantara.hcp.standard.model.HCPObjectEntrys;
+import com.hitachivantara.hcp.standard.model.HCPObjectSummary;
+import com.hitachivantara.hcp.standard.model.NamespaceBasicSetting;
+import com.hitachivantara.hcp.standard.model.NamespacePermissions;
+import com.hitachivantara.hcp.standard.model.NamespaceStatistics;
+import com.hitachivantara.hcp.standard.model.PutObjectResult;
+import com.hitachivantara.hcp.standard.model.RetentionClasses;
+import com.hitachivantara.hcp.standard.model.converter.S3ModelConverter;
+import com.hitachivantara.hcp.standard.model.converter.S3RequestConverter;
+import com.hitachivantara.hcp.standard.model.metadata.AccessControlList;
+import com.hitachivantara.hcp.standard.model.metadata.HCPMetadata;
+import com.hitachivantara.hcp.standard.model.metadata.HCPMetadataSummarys;
+import com.hitachivantara.hcp.standard.model.metadata.HCPSystemMetadata;
+import com.hitachivantara.hcp.standard.model.metadata.S3CompatibleMetadata;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckACLRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckMetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckS3MetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CopyDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CopyObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CreateDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteACLRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteMetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteS3MetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.GetACLRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.GetMetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.GetS3MetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListMetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListVersionRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.MoveDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.MoveObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.MultipartUploadRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.PutACLRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.PutMetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.PutS3MetadataRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.PutSystemMetadataRequest;
+
+public class S3CompatibleClient extends HCPStandardClient {
+	private AmazonS3 hs3Client = null;
+
+	private final S3RequestConverter RC = new S3RequestConverter();
+
+	public S3CompatibleClient(String namespace, String endpoint, Credentials credentials, ClientConfiguration clientConfiguration, KeyAlgorithm keyAlgorithm) {
+		super(namespace, endpoint, credentials, clientConfiguration, keyAlgorithm);
+		RC.setNamespace(namespace);
+	}
+
+	public void copyDirectory(CopyDirectoryRequest request) throws HSCException {
+	}
+
+	public void copyDirectory(String sourceDirectoryKey, String targetDirectoryKey) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void copyObject(CopyObjectRequest request) throws HSCException {
+		com.amazonaws.services.s3.model.CopyObjectRequest copyObjectRequest = RC.toS3Request(request);
+		hs3Client.copyObject(copyObjectRequest);
+	}
+
+	public void copyObject(String sourceKey, String targetKey) throws HSCException {
+		// Generate a new path based on the algorithm
+		sourceKey = genKey(sourceKey);
+		targetKey = genKey(targetKey);
+
+		com.amazonaws.services.s3.model.CopyObjectRequest copyObjectRequest = new com.amazonaws.services.s3.model.CopyObjectRequest(
+				getNamespace(),
+				sourceKey,
+				getNamespace(),
+				targetKey).withMetadataDirective(MetadataDirective.COPY);
+
+		hs3Client.copyObject(copyObjectRequest);
+	}
+
+	public boolean createDirectory(CreateDirectoryRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean createDirectory(String dir) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean deleteObjectACL(DeleteACLRequest request) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	public boolean deleteObjectACL(String key) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	public boolean deleteDirectory(DeleteDirectoryRequest request) throws HSCException {
+		// TODO
+		return false;
+	}
+
+//	public boolean deleteDirectory(String dir) throws HSCException {
+//		throw new UnsupportedFunctionException("Unsupport method for S3!");
+//		// dir = URLUtils.tidyUrlPath(dir);
+//		//
+//		// return this.deleteObject(dir);
+//	}
+
+	public boolean deleteMetadata(DeleteMetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean deleteMetadata(String key, String name) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean deleteObject(com.hitachivantara.hcp.standard.model.request.impl.DeleteObjectRequest request) throws HSCException {
+		return this.deleteObject(request.getKey());
+	}
+
+	public boolean deleteObject(String key) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		DeleteObjectRequest req = new DeleteObjectRequest(getNamespace(), key);
+		hs3Client.deleteObject(req);
+
+		return true;
+	}
+
+	public boolean deleteS3Metadata(DeleteS3MetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean deleteS3Metadata(String key) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesObjectACLExist(CheckACLRequest request) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	public boolean doesObjectACLExist(String key) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	public boolean doesDirectoryExist(CheckObjectRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesDirectoryExist(String dir) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesMetadataExist(CheckMetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesMetadataExist(String key, String name) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesObjectExist(CheckObjectRequest request) throws HSCException {
+		return this.doesObjectExist(request.getKey());
+	}
+
+	// public PutMetadataResult putMetadata(String key, HCPKeyValueMetadata
+	// metadata) throws
+	// HSCException {
+	//// // Generate a new path based on the algorithm
+	//// key = genKey(key);
+	////
+	//// ObjectMetadata mt = new ObjectMetadata();
+	//// for (Iterator<String> it = metadata.keySet().iterator(); it.hasNext();) {
+	//// String keyItem = (String) it.next();
+	//// mt.addUserMetadata(keyItem, metadata.get(keyItem));
+	//// }
+	//// S3Object obj = hs3Client.getObject(getNamespace(), key);
+	//// obj.setObjectMetadata(mt);
+	////
+	//// // TODO
+	//// return null;
+	// throw new HSCException("Unsupport method for S3!");
+	// }
+
+	public boolean doesObjectExist(String key) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		return hs3Client.doesObjectExist(getNamespace(), key);
+	}
+
+	// public HCPMetadata getCustomMetadata(String key, String versionId, String name) throws HSCException {
+	// throw new UnsupportedFunctionException("Unsupport method for S3!");
+	// }
+
+	// public S3CompatibleMetadata getSimpleMetadata(String key, String versionId) throws HSCException {
+	// // Generate a new path based on the algorithm
+	// key = genKey(key);
+	//
+	// ObjectMetadata metadata = hs3Client.getObjectMetadata(new GetObjectMetadataRequest(getNamespace(), key, versionId));
+	//
+	// return S3ModelConverter.toHCPObjectMetadata(metadata);
+	// }
+
+	public boolean doesS3MetadataExist(CheckS3MetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean doesS3MetadataExist(String key) throws HSCException {
+		return null != hs3Client.getObjectMetadata(getNamespace(), key);
+	}
+
+	// public HCPMetadatas listMetadatas(String key, String versionId) throws HSCException {
+	// throw new UnsupportedFunctionException("Unsupport method for S3!");
+	// }
+
+	public AccessControlList getObjectACL(GetACLRequest request) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public AccessControlList getObjectACL(String key) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	// public void deleteMetadata(String key) throws HSCException {
+	// throw new HSCException("Unsupport method for S3!");
+	// // // Generate a new path based on the algorithm
+	// // key = genKey(key);
+	// //
+	// // GetObjectRequest request = new GetObjectRequest(getNamespace(), key);
+	// // S3Object s3obj = hs3Client.getObject(request);
+	// // s3obj.setObjectMetadata(null);
+	// // try {
+	// // s3obj.close();
+	// // } catch (IOException e) {
+	// // throw new HSCException(e);
+	// // }
+	// }
+
+	public HCPMetadata getMetadata(GetMetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public HCPMetadata getMetadata(String key, String name) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public MultipartUpload getMultipartUploadInstance(MultipartUploadRequest request) {
+		// hs3Client.listParts(request)
+		// TODO Auto-generated method stub
+//		hs3Client.uploadPart(new UploadPartRequest().withPartNumber(partNumber))
+		return null;
+	}
+
+	public HCPObject getObject(com.hitachivantara.hcp.standard.model.request.impl.GetObjectRequest request) throws HSCException {
+
+		GetObjectRequest getObjectRequest = RC.toS3Request(request);
+
+		S3Object s3obj = hs3Client.getObject(getObjectRequest);
+
+		return S3ModelConverter.toHCPObject(s3obj);
+	}
+
+	public HCPObject getObject(String key) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		GetObjectRequest request = new GetObjectRequest(getNamespace(), key);
+		S3Object s3obj = hs3Client.getObject(request);
+
+		return S3ModelConverter.toHCPObject(s3obj);
+	}
+
+	public HCPObject getObject(String key, String versionId) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		GetObjectRequest request = new GetObjectRequest(getNamespace(), key, versionId);
+		S3Object s3obj = hs3Client.getObject(request);
+		
+		return S3ModelConverter.toHCPObject(s3obj);
+	}
+
+	public HCPObjectSummary getObjectSummary(CheckObjectRequest request) throws HSCException {
+		com.amazonaws.services.s3.model.GetObjectMetadataRequest s3Request = RC.toS3Request(request);
+
+		ObjectMetadata s3Metadata = hs3Client.getObjectMetadata(s3Request);
+
+		HCPObjectSummary summary = S3ModelConverter.toHCPObjectSummary(request.getKey(), s3Metadata);
+
+		return summary;
+	}
+
+	public HCPObjectSummary getObjectSummary(String key) throws HSCException {
+		CheckObjectRequest request = new CheckObjectRequest(key);
+
+		return getObjectSummary(request);
+	}
+
+	public S3CompatibleMetadata getMetadata(GetS3MetadataRequest request) throws HSCException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public S3CompatibleMetadata getMetadata(String key) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		ObjectMetadata metadata = hs3Client.getObjectMetadata(getNamespace(), key);
+
+		return S3ModelConverter.toHCPObjectMetadata(metadata);
+	}
+
+	@Override
+	protected void initialize() throws HSCException {
+		super.initialize();
+
+		String secretKey = this.getCredentials().getSecretKey();
+		String accessKey = this.getCredentials().getAccessKey();
+		com.amazonaws.ClientConfiguration s3ClientConfig = (this.getClientConfiguration() != null ? S3ModelConverter
+				.toS3ClientConfiguration(this.getClientConfiguration()) : new com.amazonaws.ClientConfiguration());
+
+		s3ClientConfig.setSignerOverride("S3SignerType");
+		s3ClientConfig.withHeader(HeaderKey.CONTENT_TYPE.getKeyname(), CONTENT_TYPE.APPLICATION_OCTET_STREAM);
+
+		hs3Client = AmazonS3ClientBuilder.standard().withClientConfiguration(s3ClientConfig).withEndpointConfiguration(new EndpointConfiguration(this.getEndpoint(), ""))
+				.withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(accessKey, secretKey))).build();
+		// hs3Client = new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey),
+		// s3ClientConfig);
+		// hs3Client.setEndpoint(this.getEndpoint());
+	}
+
+	public HCPObjectEntrys listDirectory(ListDirectoryRequest request) throws HSCException {
+		if (request.isWithDeletedObject()) {
+			throw new UnsupportedFunctionException("Unsupport list deleted objects for S3!");
+		}
+
+		String dir = request.getKey();
+		dir = URLUtils.tidyUrlPath(dir);
+
+		String namespace = StringUtils.evl(request.getNamespace(), getNamespace());
+		HCPObjectEntrys s3Objects = new HCPObjectEntrys(dir, new S3ObjectEntryIterator(hs3Client, namespace, dir, false));
+
+		return s3Objects;
+	}
+
+	public HCPObjectEntrys listDirectory(String dir) throws HSCException {
+		ListDirectoryRequest request = new ListDirectoryRequest(dir);
+
+		return listDirectory(request);
+	}
+
+	public HCPMetadataSummarys listMetadatas(ListMetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public HCPMetadataSummarys listMetadatas(String key) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void listObjects(ListObjectRequest request, ListObjectHandler handler) throws HSCException {
+		// TODO Auto-generated method stub
+
+	}
+
+	public HCPObjectEntrys listVersions(ListVersionRequest request) throws HSCException {
+		ListDirectoryRequest requestListVersion = new ListDirectoryRequest(request.getKey());
+		requestListVersion.withDeletedObject(request.isWithDeletedObject());
+
+		return this.listDirectory(requestListVersion);
+	}
+
+	public HCPObjectEntrys listVersions(String key) throws HSCException {
+		HCPObjectEntrys s3Objects = new HCPObjectEntrys(key, new S3ObjectVersionEntryIterator(hs3Client, getNamespace(), key, false));
+
+		return s3Objects;
+	}
+
+	public void moveDirectory(MoveDirectoryRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public boolean moveObject(MoveObjectRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void setObjectACL(PutACLRequest request) throws HSCException {
+//		com.amazonaws.services.s3.model.SetObjectAclRequest setObjectAclRequest=null;//= new SetObjectAclRequest("","",new AccessControlList());
+//		setObjectAclRequest.
+		// TODO Auto-generated method stub
+//		hs3Client.setObjectAcl(setObjectAclRequest);
+	}
+
+	public void setObjectACL(String key, AccessControlList acl) throws InvalidResponseException, HSCException {
+		// TODO Auto-generated method stub
+
+	}
+
+	public void putMetadata(PutMetadataRequest request) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public PutObjectResult putObject(com.hitachivantara.hcp.standard.model.request.impl.PutObjectRequest request) throws HSCException {
+		// Perform the default request parameter check
+		ValidUtils.validateRequest(request);
+
+		ValidUtils.exceptionWhenNotNull(request.getMetadataContent(), "S3 does not support custom metadata!");
+
+		// return putObject(request.getKey(), request.getInputStream());
+		String key = request.getKey();
+		InputStream in = request.getContent();
+		File file = request.getSourceFile();
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		ObjectMetadata metadata = S3ModelConverter.toS3ObjectMetadata(request.getS3CompatibleMetadata());
+		PutObjectRequest s3request = null;
+		if (file == null) {
+			s3request = new PutObjectRequest(getNamespace(), key, in, metadata);
+		} else {
+			// For file
+			s3request = new PutObjectRequest(getNamespace(), key, file);
+			s3request.withMetadata(metadata);
+		}
+
+		com.amazonaws.services.s3.model.PutObjectResult putResult = hs3Client.putObject(s3request);
+		PutObjectResult hcpPutResult = S3ModelConverter.toHCPPutObjectResult(key, putResult);
+
+		return hcpPutResult;
+	}
+
+	public PutObjectResult putObject(String key, File file) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		PutObjectRequest request = new PutObjectRequest(getNamespace(), key, file);
+		com.amazonaws.services.s3.model.PutObjectResult putResult = hs3Client.putObject(request);
+		PutObjectResult hcpPutResult = S3ModelConverter.toHCPPutObjectResult(key, putResult);
+
+		return hcpPutResult;
+	}
+
+	public PutObjectResult putObject(String key, InputStream in) throws HSCException {
+		// Generate a new path based on the algorithm
+		key = genKey(key);
+
+		PutObjectRequest request = new PutObjectRequest(getNamespace(), key, in, null);
+		com.amazonaws.services.s3.model.PutObjectResult putResult = hs3Client.putObject(request);
+		PutObjectResult hcpPutResult = S3ModelConverter.toHCPPutObjectResult(key, putResult);
+
+		return hcpPutResult;
+	}
+
+	public void putMetadata(PutS3MetadataRequest request) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void putMetadata(String key, S3CompatibleMetadata metadata) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void setSystemMetadata(PutSystemMetadataRequest metadata) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	public void setSystemMetadata(String key, HCPSystemMetadata metadata) throws HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public void setKeyAlgorithm(KeyAlgorithm keyAlgorithm) {
+		super.setKeyAlgorithm(keyAlgorithm);
+
+		RC.setKeyAlgorithm(keyAlgorithm);
+	}
+
+	@Override
+	public NamespaceBasicSetting getNamespaceSetting(String namespace) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public List<NamespaceBasicSetting> listAccessibleNamespaces() throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public NamespaceStatistics getNamespacesStatistics() throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public NamespaceStatistics getNamespacesStatistics(String namespace) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public List<RetentionClasses> listRetentionClasses() throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public List<RetentionClasses> listRetentionClasses(String namespace) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public NamespacePermissions getNamespacePermissions() throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public NamespacePermissions getNamespacePermissions(String namespace) throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+	@Override
+	public NamespaceBasicSetting getNamespaceSetting() throws InvalidResponseException, HSCException {
+		throw new UnsupportedFunctionException("Unsupport method for S3!");
+	}
+
+}

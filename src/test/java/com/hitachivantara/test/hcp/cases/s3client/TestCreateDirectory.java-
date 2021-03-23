@@ -1,0 +1,110 @@
+/*                                                                             
+ * Copyright (C) 2019 Hitachi Vantara Inc.                                     
+ *                                                                             
+ * Licensed under the Apache License, Version 2.0 (the "License");           
+ * you may not use this file except in compliance with the License.            
+ * You may obtain a copy of the License at                                     
+ *                                                                             
+ *      http://www.apache.org/licenses/LICENSE-2.0                             
+ *                                                                             
+ * Unless required by applicable law or agreed to in writing, software         
+ * distributed under the License is distributed on an "AS IS" BASIS,         
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
+ * See the License for the specific language governing permissions and         
+ * limitations under the License.                                              
+ */                                                                            
+package com.hitachivantara.test.hcp.cases.s3client;
+
+import static org.junit.Assert.assertTrue;
+
+import java.security.MessageDigest;
+import java.util.List;
+
+import org.junit.Test;
+
+import com.hitachivantara.common.util.DigestUtils;
+import com.hitachivantara.common.util.StreamUtils;
+import com.hitachivantara.hcp.standard.api.ObjectEntryIterator;
+import com.hitachivantara.hcp.standard.model.HCPObjectEntry;
+import com.hitachivantara.hcp.standard.model.HCPObjectEntrys;
+import com.hitachivantara.hcp.standard.model.HCPObjectSummary;
+import com.hitachivantara.hcp.standard.model.metadata.HCPMetadata;
+import com.hitachivantara.hcp.standard.model.metadata.S3CompatibleMetadata;
+import com.hitachivantara.hcp.standard.model.request.impl.CheckObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CopyObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.CreateDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteDirectoryRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.DeleteObjectRequest;
+import com.hitachivantara.hcp.standard.model.request.impl.ListVersionRequest;
+import com.hitachivantara.test.hcp.TestDataFactory;
+import com.hitachivantara.test.hcp.TestHCPBase;
+
+/**
+ * @author sohan
+ *
+ */
+public class TestCreateDirectory extends TestHCPBase {
+
+	@Test
+	public void testCreateDirectory() throws Exception {
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+		String dirKey = TestDataFactory.getRandomName(10) + "/" + TestDataFactory.getRandomName(10);
+		dirKey = basedir + dirKey;
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+
+		CreateDirectoryRequest request = new CreateDirectoryRequest(dirKey);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+		hcpClient.createDirectory(request);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+
+		// RESULT VERIFICATION --------------------------------------------------------------------
+		boolean exist = hcpClient.doesDirectoryExist(dirKey);
+
+		assertTrue(exist);
+		// RESULT VERIFICATION --------------------------------------------------------------------
+	}
+
+	
+	@Test
+	public void testCreateDirectoryInSpecificNamespace() throws Exception {
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+		String dirKey = TestDataFactory.getRandomName(10) + "/" + TestDataFactory.getRandomName(10);
+		dirKey = basedir + dirKey;
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+
+		CreateDirectoryRequest request = new CreateDirectoryRequest(dirKey).withNamespace(namespace2Name);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+		hcpClient.createDirectory(request);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+
+		// RESULT VERIFICATION --------------------------------------------------------------------
+		boolean exist = hcpClient.doesDirectoryExist(new CheckObjectRequest(dirKey).withNamespace(namespace2Name));
+
+		assertTrue(exist);
+		// RESULT VERIFICATION --------------------------------------------------------------------
+	}
+	
+	//TODO 包含？会被认为错误
+	@Test
+	public void testCreateDirectoryWithSpecialChar() throws Exception {
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+		String dirKey = "A ~!@#$%^&*()_+`1234567890-=[] {};':\"<>,. A";
+		dirKey = basedir+"xf/" + dirKey;
+		
+		if (hcpClient.doesDirectoryExist(dirKey)) {
+			hcpClient.deleteDirectory(new DeleteDirectoryRequest(dirKey));
+		}
+		// PREPARE TEST DATA ----------------------------------------------------------------------
+
+		CreateDirectoryRequest request = new CreateDirectoryRequest(dirKey);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+		hcpClient.createDirectory(request);
+		// EXEC TEST FUNCTION ---------------------------------------------------------------------
+
+		// RESULT VERIFICATION --------------------------------------------------------------------
+		boolean exist = hcpClient.doesDirectoryExist(dirKey);
+
+		assertTrue(exist);
+		// RESULT VERIFICATION --------------------------------------------------------------------
+	}
+}
