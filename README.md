@@ -1,6 +1,6 @@
 # HCP-REST-SDK
 The HCP-SDK is a customized SDK for the private interface protocol of Hitachi Content PlantForm (HCP). It contains implementations for all HCP REST APIs, HCP system management APIs, and HCP-MQE (object query) APIs. With this SDK, users can access the HCP proprietary protocol more easily.
-The usage similar with AWS-S3-SDK with friendly design. This SDK used by many customers in China in the recent 3 years and stabled.
+The usage similar with AWS-S3-SDK with friendly design. This SDK used by many customers in China in the recent 3 years and this is a stable release.
 
 You can see which features are supported in the following file
 + [HCP SDK Functionality](https://github.com/pineconehouse/hitachivantara-java-sdk-hcp/blob/main/HCP%20SDK%20Functionality.pdf) 
