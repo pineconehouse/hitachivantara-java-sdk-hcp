@@ -8,3 +8,4 @@ The related project are here:
 + [core](https://github.com/pineconehouse/hitachivantara-java-sdk-core)
 + [common](https://github.com/pineconehouse/amituofo-java-sdk-common)
 + [example-hcp](https://github.com/pineconehouse/hitachivantara-java-example-hcp)
++ [example-hcp-web-post-object](https://github.com/pineconehouse/hitachivantara-java-example-hcp-web)
