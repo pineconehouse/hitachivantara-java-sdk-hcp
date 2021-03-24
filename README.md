@@ -3,3 +3,8 @@ The HCP-SDK is a customized SDK for the private interface protocol of Hitachi Co
 
 You can see which features are supported in the following file
 + [HCP SDK Functionality](https://github.com/pineconehouse/hitachivantara-java-sdk-hcp/blob/main/HCP%20SDK%20Functionality.pdf) 
+
+The related project are here:
++ [core](https://github.com/pineconehouse/hitachivantara-java-sdk-core)
++ [common](https://github.com/pineconehouse/amituofo-java-sdk-common)
++ [example-hcp](https://github.com/pineconehouse/hitachivantara-java-example-hcp)
