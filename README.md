@@ -5,7 +5,9 @@ You can see which features are supported in the following file
 + [HCP SDK Functionality](https://github.com/pineconehouse/hitachivantara-java-sdk-hcp/blob/main/HCP%20SDK%20Functionality.pdf) 
 
 The related project are here:
-+ [core](https://github.com/pineconehouse/hitachivantara-java-sdk-core)
-+ [common](https://github.com/pineconehouse/amituofo-java-sdk-common)
++ [dependency-project-core](https://github.com/pineconehouse/hitachivantara-java-sdk-core)
++ [dependency-project-common](https://github.com/pineconehouse/amituofo-java-sdk-common)
+
+Examples to show how to use HCP-REST-SDK/AWS-S3-SDK to access HCP, and how to post object directly from website:
 + [example-hcp](https://github.com/pineconehouse/hitachivantara-java-example-hcp)
 + [example-hcp-web-post-object](https://github.com/pineconehouse/hitachivantara-java-example-hcp-web)
